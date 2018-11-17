@@ -62,7 +62,7 @@ public class TemperatureReader extends OBDResponseReader implements IResultReade
 # Diagrama UML
 
 O diagrama de classes abaixo mostra os principais componentes do modelo projetado para lidar com os objetos OBD no aplicativo OBDProxy.
-![UML Diagram](https://github.com/mauricio-porto/OBDProxy/pictures/OBDProxy-UML.png "UML Diagram")
+![UML Diagram](https://github.com/mauricio-porto/OBDProxy/blob/master/pictures/OBDProxy-UML.png "UML Diagram")
 
 
 ## Enumeração OBDCommand
