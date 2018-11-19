@@ -1,4 +1,12 @@
-# Visão Geral
+### Sumário
+
+1. [Visão Geral](#overview)
+2. [OBD-II PIDs](#obd-ii-pids)
+3. [Diagrama UML](#diagrama-uml)
+4. [Enumeração OBDCommand](#obdcommand)
+5. [Como Usar](#como-usar)
+
+# Overview
 
 O OBDProxy é parte de um aplicativo de diagnóstico via OBD que fica consultando uma lista (ver *commandList*) de parâmetros de diagnóstico (ver OBD-II PIDs abaixo), como temperatura do motor, pressão do óleo, etc. e mostrando-os (ou enviando-os remotamente) a intervalos pequenos (tipicamente a cada 2 segundos).
 
@@ -65,9 +73,9 @@ O diagrama de classes abaixo mostra os principais componentes do modelo projetad
 ![UML Diagram](https://github.com/mauricio-porto/OBDProxy/blob/master/pictures/OBDProxy-UML.png "UML Diagram")
 
 
-## Enumeração OBDCommand
+## OBDCommand
 
-O componente central é uma enumeração que reúne todos os comandos OBD. Esses comendos são utilizados para a inicialização do scanner OBD e para efetuar a leitura dos dados de diagnóstico que o scanner coleta.
+O componente central é uma enumeração que reúne todos os comandos OBD. Esses comandos são utilizados para a inicialização do scanner OBD e para efetuar a leitura dos dados de diagnóstico que o scanner coleta.
 
 A vantagem de usar uma enumeração é principalmente a eficiência, pois cada novo elemento de uma enumeração é bem mais leve do que uma nova classe.
 
@@ -148,3 +156,79 @@ THROTTLE_POSITION("Throttle posititon", "01 11", new ThrottlePositionReader(), "
 E voilà, está pronto, basta usar.
 
 Fácil estender o modelo com novos parâmetros OBD, não?
+
+# Como usar
+
+Como dito anteriormente, a classe que se comunica com o scanner OBD é a *OBDConnector*.
+
+Para enviar a lista de comandos OBD ao scanner e repassar as respostas ao serviço de notificação, eu criei uma instância de *Runnable* como segue:
+
+```
+private Runnable mQueueCommands = new Runnable() {
+        public void run() {
+            StringBuilder sb = new StringBuilder();
+            sb.append('"').append("data").append('"').append(':').append('{');
+            for (int i = 0; i < commandList.length; i++) {
+                OBDCommand command = commandList[i];
+                sb.append('"').append(command.getMnemo()).append('"').append(':').append('[');
+                sb.append('"').append(command.getName()).append('"').append(',');
+                String readParam = getOBDData(command);
+                if (readParam != null) {
+                    sb.append(readParam).append(']');
+                } else {
+                    sb.append(0).append(']');
+                    Log.e(TAG, "\t\t " + command.getName() + " got null!!!");
+                }
+                if (i < commandList.length - 1) {
+                    sb.append(',');
+                }
+            }
+            sb.append('}');
+            service.notifyDataReceived(sb.toString());
+            // run again in 2s
+            mHandler.postDelayed(mQueueCommands, 2000);
+        }
+    };
+```
+
+Minha lista de *OBDCommand* chamada *commandList*:
+```
+OBDCommand[] commandList = {
+            OBDCommand.ENGINE_RPM,
+            OBDCommand.ENGINE_LOAD,
+            OBDCommand.SPEED,
+            OBDCommand.AMBIENT_AIR_TEMPERATURE,
+            OBDCommand.COOLANT_TEMPERATURE,
+            OBDCommand.INTAKE_AIR_TEMPERATURE,
+            OBDCommand.MAF};
+
+```
+
+
+Veja que por razões de performance, usei um _array_ para os *OBDCommand* que utilizei nesse protótipo, o que torna a lista fixa. Mas como dito no início, poderia usar uma lista dinâmica, como *ArrayList* por exemplo.
+
+Voltando a examinar o *Runnable* _mQueueCommands_, notamos o uso do método *getOBDData(command)* para enviar um comando de leitura ao scanner OBD e retornar a resposta.
+
+Eis sua implementação:
+
+```
+private String getOBDData(OBDCommand param) {
+        if (param == null) {
+            return null;
+        }
+
+        byte[] data = sendToDevice(param.getOBDcode());
+        if (data != null && data.length > 0) {
+            IResultReader reader = param.getReader();
+            if (reader != null) {
+                return reader.readFormattedResult(data);
+            }
+        }
+        return null;
+    }
+```
+
+Neste método, nós enviamos (_sendToDevice_) ao scanner por Bluetooth o código de leitura (_OBDCode_) associado ao parâmetro a ser lido e recebemos a resposta num _byte array_ que é verificado quanto a não ser nula a resposta. Caso não seja nula, tal resposta é encaminhada ao método _readFormattedResult(data)_ que irá então traduzir a resposta de acordo com o formato esperado, conforme descrito na seção [OBD-II PIDS](#obd-ii-pids).
+
+Finalmente, no laço de execução do *Runnable mQueueCommands* a resposta obtida e convertida é enviada ao serviço de notificação pelo _service.notifyDataReceived()_. e uma nova execução é agendada para daí a 2 segundos.
+
