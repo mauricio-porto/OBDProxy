@@ -1,41 +1,42 @@
-### Sumário
+### Summary
 
-1. [Visão Geral](#overview)
+1. [Overview](#overview)
 2. [OBD-II PIDs](#obd-ii-pids)
-3. [Diagrama UML](#diagrama-uml)
-4. [Enumeração OBDCommand](#obdcommand)
-5. [Como Usar](#como-usar)
+3. [UML Diagram](#uml-diagram)
+4. [OBDCommand enumeration](#obdcommand)
+5. [How to use](#how-to-use)
 
 # Overview
 
-O OBDProxy é parte de um aplicativo de diagnóstico via OBD que fica consultando uma lista (ver *commandList*) de parâmetros de diagnóstico (ver OBD-II PIDs abaixo), como temperatura do motor, pressão do óleo, etc. e mostrando-os (ou enviando-os remotamente) a intervalos pequenos (tipicamente a cada 2 segundos).
+OBDProxy is part of an OBD diagnostic application that queries a list (see *commandList*) of diagnostic parameters (see OBD-II PIDs below), such as engine temperature, oil pressure, etc. and showing them (or sending them remotely) at small intervals (typically every 2 seconds).
 
-Na versão implementada, a lista de parâmetros é fixa, sendo constituída por 7 tipos de informação sobre o funcionamento do motor, mas essa lista poderia ser modificada a qualquer tempo durante a execução do aplicativo.
+In the implemented version, the list of parameters is of fixed length, consisting of 7 types of information about the operation of the engine, but this list could be modified at any time during the execution of the application.
 
-Nós temos uma classe *OBDConnector* que fica enviando tal lista de consultas ao scanner OBD via Bluetooth e recebendo e tratando as respostas.
+We have an *OBDConnector* class that sends such a list of queries to the OBD scanner via Bluetooth and receive and treat the responses.
 
 # OBD-II PIDs
 
-[OBD-II PIDs](http://en.wikipedia.org/wiki/OBD-II_PIDs) são os códigos utilizados para consultar os dados de um veículo, usados em ferramentas de diagnóstico.
+[OBD-II PIDs](http://en.wikipedia.org/wiki/OBD-II_PIDs) are the codes used to query the data of a vehicle, used in diagnostic tools.
 
-Esses códigos são classificados em tipos de serviço, conforme o link Wikipedia apresenta. Aqui vamos tratar apenas do serviço 01 - Mostrar dados atuais.
+These codes are classified into service types, as the above Wikipedia link shows. Here we will only deal with service 01 - Show current data.
 
-O programa cliente envia uma requisição de leitura passando o identificador do serviço e o PID (identificador do parâmetro) que deseja.
+The client program sends a read request by passing the service identifier and the parameter identifier (PID) it wishes.
 
-O scanner OBD então responde com um valor codificado que pode ter um número de bytes variável.
+The OBD scanner then responds with an encoded value that can have a variable number of bytes.
 
-A resposta de cada parâmetro (PID) é codificada de forma a otimizar a velocidade e o uso de memória, muitas vezes exigindo uma fórmula para ser traduzida em valores com significado válido.
-Por exemplo, o PID para a temperatura do ar na admissão (PID *0F*) retorna apenas um byte e precisa ter seu valor subtraído de 40, que irá indicar a temperatura em graus Celsius.
+The response of each parameter (PID) is coded in order to optimize speed and memory usage, often requiring a formula to translate in meaningful values.
+For example, the PID for the inlet air temperature (PID *0F*) returns only one byte and must have its value subtracted from 40, which will indicate the temperature in Celsius degrees.
 
-Disso resulta que precisamos ter um código específico para tratar e traduzir cada um dos parâmetros (PID) que desejarmos usar.
+As a result, we need to have a specific code to process and translate each of the parameters (PID) we want to use.
 
-Minha solução foi concentrar o comportamento comum numa classe abstrata chamada *OBDResponseReader* e estender essa classe para cada PID desejado, implementando os métodos que traduzem o resultado lido para os valores e unidades necessários.
+My solution was to concentrate the common behavior on an abstract class called *OBDResponseReader* and extend that class to each desired PID by implementing methods that translate the result read to the required meaningful values ​​and units.
 
-As classes especializadas em efetuar a tradução de cada parâmetro devem implementar 2 métodos, chamados *readResult* e *readFormattedResult* que retornam os valores brutos lidos (em bytes) para os valores convertidos com suas respectivas unidades. Por exemplo, RPM para a rotação do motor e ºC para temperaturas.
+The classes specialized in translating each parameter must implement 2 methods, called *readResult* and *readFormattedResult*, which return the raw read values ​​(in bytes) to the converted values ​​with their respective units. For example, RPM for motor rotation and °C for temperatures.
 
-Esses 2 métodos de tradução dos resultados são declarados na interface *IResultReader* que as classes especializadas devem implementar.
+These 2 methods of translating the results are declared in the *IResultReader* interface that specialized classes must implement.
 
-Veja o exemplo para a classe *TemperatureReader*:
+See the example for the *TemperatureReader* class:
+
 ```
 /**
  * @author mauricio
@@ -67,36 +68,37 @@ public class TemperatureReader extends OBDResponseReader implements IResultReade
 }
 ```
 
-# Diagrama UML
+# UML Diagram
 
-O diagrama de classes abaixo mostra os principais componentes do modelo projetado para lidar com os objetos OBD no aplicativo OBDProxy.
+The class diagram below shows the major components of the model designed to handle OBD objects in the OBDProxy application.
 ![UML Diagram](https://github.com/mauricio-porto/OBDProxy/blob/master/pictures/OBDProxy-UML.png "UML Diagram")
-
 
 ## OBDCommand
 
-O componente central é uma enumeração que reúne todos os comandos OBD. Esses comandos são utilizados para a inicialização do scanner OBD e para efetuar a leitura dos dados de diagnóstico que o scanner coleta.
+The central component is an enumeration that brings together all OBD commands. These commands are used to initialize the OBD scanner and to read the diagnostic data that the scanner collects.
 
-A vantagem de usar uma enumeração é principalmente a eficiência, pois cada novo elemento de uma enumeração é bem mais leve do que uma nova classe.
+The advantage of using an enumeration is primarily efficiency, as each new element of an enumeration is much lighter than a new class.
 
-O construtor dessa enumeração recebe 4 argumentos:
+The constructor of this enumeration receives 4 arguments:
 
-  - O nome do comando;
-  - O código OBD do comando;
-  - Uma referência a um tradutor de resultado, ou seja, uma classe que implementa a interface *IResultReader* adequadamente;
-  - Um mnemônico para ser usado como identificador.
-  
-Veja um exemplo:
+  - The name of the command;
+  - The OBD code of the command;
+  - A reference to a result translator, that is, a class that implements the interface *IResultReader* properly;
+  - A mnemonic to be used as an identifier.
+  
+Here's an example:
+
 ```
   AMBIENT_AIR_TEMPERATURE("Ambient Air Temperature", "01 46", new TemperatureReader(), "ambTemp")
 ```
 
-Para acrescentar um novo parâmetro OBD a ser lido, tudo o que o programador precisa fazer é implementar um leitor de resultado para esse parâmetro e declarar um novo construtor como o exemplo acima.
+To add a new OBD parameter to be read, all the programmer needs to do is implement a result reader for this parameter and declare it's constructor as in the example above.
 
-Como exercício, vamos acrescentar o parâmetro posição do acelerador (Throttle position) ao modelo.
+As an exercise, let's add the Throttle position parameter to the model.
 
-Inicialmente, precisamos criar a classe *ThrottlePositionReader* que estende a *OBDResponseReader* e implementa *IResultReader*.
-Usando sua IDE preferida, a classe gerada automaticamente deverá se assemelhar a isto:
+Initially, we need to create the *ThrottlePositionReader* class that extends the *OBDResponseReader* and implements *IResultReader*.
+Using your preferred IDE, the automatically generated class should resemble this:
+
 ```
 package com.braintech.obdproxy.base;
 
@@ -123,11 +125,13 @@ public class ThrottlePositionReader extends OBDResponseReader implements IResult
     }
 }
 ```
-Vamos preencher os métodos e fazer a conversão do valor retornado.
 
-Segundo a página Wikipedia sobre os [OBD-II PIDs](https://en.wikipedia.org/wiki/OBD-II_PIDs), a posição do acelerador é dada em percentual e a conversão do byte lido A é feita por A * 100 / 255.
+Let's fill out the methods and do the conversion of the returned value.
 
-Assim os métodos preenchidos ficarão:
+According to the Wikipedia page on [OBD-II PIDs](https://en.wikipedia.org/wiki/OBD-II_PIDs), the throttle position is given in percent and the conversion of the read byte A is made by A * 100/255.
+
+Thus the completed methods will be:
+
 ```
     @Override
     public String readResult(byte[] input) {
@@ -148,20 +152,21 @@ Assim os métodos preenchidos ficarão:
     }
 ```
 
-Por último, precisamos acrescentar o construtor desse novo parâmetro na enumeração *OBDCommand*, desta forma:
+Finally, we need to add the constructor of this new parameter in the *OBDCommand* enumeration, like this:
+
 ```
 THROTTLE_POSITION("Throttle posititon", "01 11", new ThrottlePositionReader(), "throtPos")
 ```
 
-E voilà, está pronto, basta usar.
+And voila, it's ready, just use it.
 
-Fácil estender o modelo com novos parâmetros OBD, não?
+Easy to extend the model with new OBD parameters, right?
 
-# Como usar
+# How to use
 
-Como dito anteriormente, a classe que se comunica com o scanner OBD é a *OBDConnector*.
+As previously stated, the class that communicates with the OBD scanner is the *OBDConnector*.
 
-Para enviar a lista de comandos OBD ao scanner e repassar as respostas ao serviço de notificação, eu criei uma instância de *Runnable* como segue:
+To send the list of OBD commands to the scanner and pass the responses to the notification service, I created an instance of *Runnable* as follows:
 
 ```
 private Runnable mQueueCommands = new Runnable() {
@@ -191,7 +196,8 @@ private Runnable mQueueCommands = new Runnable() {
     };
 ```
 
-Minha lista de *OBDCommand* chamada *commandList*:
+My list of *OBDCommand* named *commandList*:
+
 ```
 OBDCommand[] commandList = {
             OBDCommand.ENGINE_RPM,
@@ -204,12 +210,11 @@ OBDCommand[] commandList = {
 
 ```
 
+Note that for performance reasons, I used an _array_ for the *OBDCommand* used in this prototype, with a fixed length. But as said at the beginning, I could use a dynamic list, such as *ArrayList* for example.
 
-Veja que por razões de performance, usei um _array_ para os *OBDCommand* que utilizei nesse protótipo, o que torna a lista fixa. Mas como dito no início, poderia usar uma lista dinâmica, como *ArrayList* por exemplo.
+Going back to inspecting the *Runnable* _mQueueCommands_, we note the use of the *getOBDData(command)* method to send a read request to the OBD scanner and return the response.
 
-Voltando a examinar o *Runnable* _mQueueCommands_, notamos o uso do método *getOBDData(command)* para enviar um comando de leitura ao scanner OBD e retornar a resposta.
-
-Eis sua implementação:
+Here is its implementation:
 
 ```
 private String getOBDData(OBDCommand param) {
@@ -228,7 +233,7 @@ private String getOBDData(OBDCommand param) {
     }
 ```
 
-Neste método, nós enviamos (_sendToDevice_) ao scanner por Bluetooth o código de leitura (_OBDCode_) associado ao parâmetro a ser lido e recebemos a resposta num _byte array_ que é verificado quanto a não ser nula a resposta. Caso não seja nula, tal resposta é encaminhada ao método _readFormattedResult(data)_ que irá então traduzir a resposta de acordo com o formato esperado, conforme descrito na seção [OBD-II PIDS](#obd-ii-pids).
 
-Finalmente, no laço de execução do *Runnable mQueueCommands* a resposta obtida e convertida é enviada ao serviço de notificação pelo _service.notifyDataReceived()_. e uma nova execução é agendada para daí a 2 segundos.
+In this method, we send (thru _sendToDevice_) to the Bluetooth scanner the read code (_OBDCode_) associated with the parameter to be read and we receive the response in a _byte array_ that is checked for the null response. If it is not null, such a response is forwarded to the _readFormattedResult(data)_ method, which will then translate the response according to the expected format as described in the section [OBD-II PIDS](#obd-ii-pids).
 
+Finally, in the execution loop of the *Runnable mQueueCommands*, the response obtained is converted and sent to the notification service by _service.notifyDataReceived()_ and a new run is rescheduled to 2 seconds.
